@@ -1,13 +1,20 @@
 #include "thread_init.h"
 #include "nx_stm32_eth_driver.h"
+#include "thread_socket.h"
 
 // ---------thread parameters
+// thread init parameters
 #define THREAD_INIT_STACK_SIZE		4096u
 #define THREAD_INIT_PRIO			28u
 TX_THREAD thread_init_block;
 uint64_t thread_init_stack[THREAD_INIT_STACK_SIZE/8];
-void thread_init(UINT input);
+void thread_init(ULONG input);
 
+// thread socket parameters
+#define THREAD_SOCKET_STACK_SIZE    4096u
+#define THREAD_SOCKET_PRIO          25u
+TX_THREAD thread_socket_block;
+uint64_t thread_socket_stack[THREAD_SOCKET_STACK_SIZE/8];
 
 // ---------netxduo parameters
 NX_PACKET_POOL    pool_0;
@@ -68,12 +75,23 @@ void  tx_application_define(void *first_unused_memory)
 }
 
 
-void thread_init(UINT input)
+void thread_init(ULONG input)  // 将UINT改为ULONG
 {
+	// 创建socket线程
+	tx_thread_create(&thread_socket_block,
+		"tx_socket",
+		thread_socket_entry,
+		0,
+		&thread_socket_stack[0],
+		THREAD_SOCKET_STACK_SIZE,
+		THREAD_SOCKET_PRIO,
+		THREAD_SOCKET_PRIO,
+		TX_NO_TIME_SLICE,
+		TX_AUTO_START);
+	
 	while (1) {
 		sleep_ms(100);
 	}
-	
 }
 
 
