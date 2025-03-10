@@ -59,11 +59,17 @@ file(GLOB_RECURSE SrcNetX
     "${PROJECT_SOURCE_DIR}/ThirdPartys/NetXDuo/addons/telnet/*.c"
     )
 
+file(GLOB_RECURSE SrcApp
+    "${PROJECT_SOURCE_DIR}/Threads/src/*.c"
+    )
+
+
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     ${SrcThreadX}
     ${SrcNetX}
+    ${SrcApp}
 )
 
 # Add include paths
@@ -79,6 +85,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${PROJECT_SOURCE_DIR}/ThirdPartys/NetXDuo/crypto_libraries/ports/cortex-m7/gnu/inc
     ${PROJECT_SOURCE_DIR}/ThirdPartys/NetXDuo/crypto_libraries/inc
     ${PROJECT_SOURCE_DIR}/ThirdPartys/NetXDuo/user
+    ${PROJECT_SOURCE_DIR}/Threads/inc
 )
 
 # Add project symbols (macros)

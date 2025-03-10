@@ -24,10 +24,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "tx_api.h"
-#include "nx_api.h"
-#include "nx_stm32_eth_driver.h"
-#include "tx_thread.h"
 
 /* USER CODE END Includes */
 
@@ -72,52 +68,6 @@ void sleep_ms(uint32_t ms)
 void sleep_us(uint32_t us)
 {
 	tx_thread_sleep(us/1000u);
-}
-
-// ---------netxduo parameters
-NX_PACKET_POOL    pool_0;
-NX_IP             ip_0;
-#define NX_PACKET_POOL_SIZE ((1536 + sizeof(NX_PACKET)) * 8)
-ULONG  packet_pool_area[NX_PACKET_POOL_SIZE/4 + 4] __attribute__((section(".NetXPoolSection")));
-ULONG  arp_space_area[52*20 / sizeof(ULONG)] __attribute__((section(".NetXPoolSection")));
-
-#define IP_ADDR0                        192
-#define IP_ADDR1                        168
-#define IP_ADDR2                        0
-#define IP_ADDR3                        135
-
-#define  THREAD_NETX_IP0_PRIO0                          2u
-#define  THREAD_NETX_IP0_STK_SIZE                     	1024*16u
-static   uint64_t  thread_netx_ip0_stack[THREAD_NETX_IP0_STK_SIZE/8];
-
-// ---------
-UINT nx_init_status = 0;
-void  tx_application_define(void *first_unused_memory)
-{
-	HAL_ETH_DeInit(&heth);
-	nx_system_initialize();
-	nx_init_status |= nx_packet_pool_create(&pool_0,
-									"NetX Main Packet Pool",
-									1536,  (ULONG*)(((int)packet_pool_area + 15) & ~15) ,
-									NX_PACKET_POOL_SIZE);
-	nx_init_status |= nx_ip_create(&ip_0,
-						"NetX IP0",
-						IP_ADDRESS(IP_ADDR0, IP_ADDR1, IP_ADDR2, IP_ADDR3),
-						0xFFFFFF00UL,
-						&pool_0, nx_stm32_eth_driver,
-						(UCHAR*)thread_netx_ip0_stack,
-						sizeof(thread_netx_ip0_stack),
-						THREAD_NETX_IP0_PRIO0);
-	nx_init_status |= nx_arp_enable(&ip_0, (void *)arp_space_area, sizeof(arp_space_area));
-	nx_init_status |= nx_ip_fragment_enable(&ip_0);
-	nx_init_status |= nx_tcp_enable(&ip_0);
-	nx_init_status |= nx_udp_enable(&ip_0);
-	nx_init_status |= nx_icmp_enable(&ip_0);
-
-	ULONG gateway_ip = IP_ADDRESS(IP_ADDR0, IP_ADDR1, IP_ADDR2, IP_ADDR3);
-	gateway_ip = (gateway_ip & 0xFFFFFF00) | 0x01;
-	nx_ip_gateway_address_set(&ip_0, gateway_ip);
-
 }
 
 /* USER CODE END 0 */
