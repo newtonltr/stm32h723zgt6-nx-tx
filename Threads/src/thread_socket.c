@@ -75,7 +75,7 @@ void thread_socket_entry(ULONG thread_input)
     }
     
     // 发送初始启动消息
-    send_message_with_timestamp("TCP服务器已启动，等待连接...");
+    send_message_with_timestamp("TCP started, wait connect...");
     
     // 等待客户端连接
     status = nx_tcp_server_socket_accept(&tcp_socket, NX_WAIT_FOREVER);
@@ -88,7 +88,7 @@ void thread_socket_entry(ULONG thread_input)
     }
     
     // 发送连接成功消息
-    send_message_with_timestamp("客户端已连接");
+    send_message_with_timestamp("client connected");
     
     // 主循环
     while (1)
@@ -138,11 +138,11 @@ void thread_socket_entry(ULONG thread_input)
                 nx_tcp_server_socket_unaccept(&tcp_socket);
                 
                 // 重新等待连接
-                send_message_with_timestamp("客户端断开连接，等待新连接...");
+                send_message_with_timestamp("client disconnected, wait connect...");
                 status = nx_tcp_server_socket_accept(&tcp_socket, NX_WAIT_FOREVER);
                 if (status == NX_SUCCESS)
                 {
-                    send_message_with_timestamp("新客户端已连接");
+                    send_message_with_timestamp("new client connected");
                 }
             }
         }
