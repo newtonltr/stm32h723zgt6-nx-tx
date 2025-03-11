@@ -73,10 +73,7 @@ void thread_socket_entry(ULONG thread_input)
         nx_tcp_socket_delete(&tcp_socket);
         return;
     }
-    
-    // 发送初始启动消息
-    send_message_with_timestamp("TCP started, wait connect...");
-    
+        
     // 等待客户端连接
     status = nx_tcp_server_socket_accept(&tcp_socket, NX_WAIT_FOREVER);
     if (status != NX_SUCCESS)
@@ -137,8 +134,6 @@ void thread_socket_entry(ULONG thread_input)
                 nx_tcp_socket_disconnect(&tcp_socket, NX_WAIT_FOREVER);
                 nx_tcp_server_socket_unaccept(&tcp_socket);
                 
-                // 重新等待连接
-                send_message_with_timestamp("client disconnected, wait connect...");
                 status = nx_tcp_server_socket_accept(&tcp_socket, NX_WAIT_FOREVER);
                 if (status == NX_SUCCESS)
                 {
