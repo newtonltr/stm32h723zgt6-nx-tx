@@ -26,7 +26,9 @@ ULONG  arp_space_area[52*20 / sizeof(ULONG)] __attribute__((section(".NetXPoolSe
 #define IP_ADDR0                        192
 #define IP_ADDR1                        168
 #define IP_ADDR2                        0
-#define IP_ADDR3                        135
+#define IP_ADDR3                        200
+
+ULONG  ip0_address = IP_ADDRESS(IP_ADDR0, IP_ADDR1, IP_ADDR2, IP_ADDR3);
 
 #define  THREAD_NETX_IP0_PRIO0                          2u
 #define  THREAD_NETX_IP0_STK_SIZE                     	1024*16u
@@ -45,7 +47,7 @@ void  tx_application_define(void *first_unused_memory)
 									NX_PACKET_POOL_SIZE);
 	nx_init_status |= nx_ip_create(&ip_0,
 						"NetX IP0",
-						IP_ADDRESS(IP_ADDR0, IP_ADDR1, IP_ADDR2, IP_ADDR3),
+						ip0_address,
 						0xFFFFFF00UL,
 						&pool_0, nx_stm32_eth_driver,
 						(UCHAR*)thread_netx_ip0_stack,
@@ -57,9 +59,11 @@ void  tx_application_define(void *first_unused_memory)
 	nx_init_status |= nx_udp_enable(&ip_0);
 	nx_init_status |= nx_icmp_enable(&ip_0);
 
-	ULONG gateway_ip = IP_ADDRESS(IP_ADDR0, IP_ADDR1, IP_ADDR2, IP_ADDR3);
+	ULONG gateway_ip = ip0_address;
 	gateway_ip = (gateway_ip & 0xFFFFFF00) | 0x01;
 	nx_ip_gateway_address_set(&ip_0, gateway_ip);
+
+	sleep_ms(300);
 
 	tx_thread_create(&thread_init_block, 
 		"tx_init", 
