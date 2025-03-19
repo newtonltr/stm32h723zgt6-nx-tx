@@ -87,10 +87,6 @@ void thread_socket_entry(ULONG thread_input)
         return;
     }
         
-    
-    // 发送连接成功消息
-    send_message_with_timestamp("client connected");
-    
     while (1) {
         // 等待客户端连接
         status = nx_tcp_server_socket_accept(&tcp_socket, NX_WAIT_FOREVER);

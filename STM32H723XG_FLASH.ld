@@ -197,7 +197,7 @@ SECTIONS
   } >DTCMRAM
 
 
-  .RxDescripSection 0x30000000:
+  .RxDescripSection 0x30000000 (NOLOAD):
   {
     . = ALIGN(4);
     __RxDescripSection_Start = .;
@@ -206,7 +206,7 @@ SECTIONS
     __RxDescripSection_End = .;
   } >RAM_D2
 
-  .TxDescripSection 0x30000080:
+  .TxDescripSection 0x30000080 (NOLOAD):
   {
     . = ALIGN(4);
     __TxDescripSection_Start = .;
@@ -215,7 +215,7 @@ SECTIONS
     __TxDescripSection_End = .;
   } >RAM_D2
 
-  .NetXPoolSection 0x30000100:
+  .NetXPoolSection 0x30000100 (NOLOAD):
   {
     . = ALIGN(4);  /* 对齐到 4 字节边界 */
     __NetXPoolSection_start = .;  /* 定义全局符号，表示段的起始地址 */
