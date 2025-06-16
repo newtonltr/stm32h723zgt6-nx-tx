@@ -196,6 +196,14 @@ SECTIONS
     . = ALIGN(8);
   } >DTCMRAM
 
+  .SerialDMASection (NOLOAD) :
+  {
+    . = ALIGN(4);
+    __SerialDMASection_Start = .;
+    *(.SerialDMASection);
+    . = ALIGN(4);
+    __SerialDMASection_End = .;
+  } >RAM
 
   .RxDescripSection 0x30000000 (NOLOAD):
   {

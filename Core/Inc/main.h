@@ -66,11 +66,36 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define PHY_RST_Pin GPIO_PIN_10
 #define PHY_RST_GPIO_Port GPIOB
+#define USART1_CK_Pin GPIO_PIN_8
+#define USART1_CK_GPIO_Port GPIOD
 
 /* USER CODE BEGIN Private defines */
 void sleep_s(uint32_t s);
 void sleep_ms(uint32_t ms);
 void sleep_us(uint32_t us);
+
+/* USER CODE BEGIN Private defines */
+#define CONVERTER_PROTOCOL_HEAD 0XAA
+#define CONVERTER_PROTOCOL_TAIL 0X55
+
+enum frame_type_list {
+  CAN_DATA_FRAME,
+  CAN_REMOTE_FRAME,
+};
+
+
+__packed struct can_pack_protocol_head {
+  uint8_t head;
+  uint32_t id;
+  uint8_t frame_type;
+  uint8_t len;
+};
+
+__packed struct converter_protocol {
+  struct can_pack_protocol_head header;
+  uint8_t data[8];
+  uint16_t crc;  
+};
 
 /* USER CODE END Private defines */
 
