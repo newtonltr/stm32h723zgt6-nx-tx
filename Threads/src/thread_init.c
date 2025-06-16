@@ -136,17 +136,16 @@ void thread_init(ULONG input)  // 将UINT改为ULONG
 		{
 			fdcan_rx_flag = 0;
 			struct fdcan_tx_frame fdcan_tx_frame;
-			fdcan_tx_frame.header.Identifier = 0x101;
+			fdcan_tx_frame.header.Identifier = 0x123;
+			fdcan_tx_frame.header.IdType = FDCAN_STANDARD_ID;
 			fdcan_tx_frame.header.TxFrameType = FDCAN_DATA_FRAME;
-			fdcan_tx_frame.header.DataLength = 8;
-			fdcan_tx_frame.data[0] = 0x01;
-			fdcan_tx_frame.data[1] = 0x02;
-			fdcan_tx_frame.data[2] = 0x03;
-			fdcan_tx_frame.data[3] = 0x04;
-			fdcan_tx_frame.data[4] = 0x05;
-			fdcan_tx_frame.data[5] = 0x06;
-			fdcan_tx_frame.data[6] = 0x07;
-			fdcan_tx_frame.data[7] = 0x08;
+			fdcan_tx_frame.header.DataLength = (uint32_t)fdcan_rx_frame.header.DataLength;
+			fdcan_tx_frame.header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+			fdcan_tx_frame.header.BitRateSwitch = FDCAN_BRS_OFF;
+			fdcan_tx_frame.header.FDFormat = FDCAN_CLASSIC_CAN;
+			fdcan_tx_frame.header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+			fdcan_tx_frame.header.MessageMarker = 0;
+			memcpy(fdcan_tx_frame.data, fdcan_rx_frame.data, fdcan_rx_frame.header.DataLength);
 			fdcan1_send(&fdcan_tx_frame);
 		}
 		sleep_ms(1);
