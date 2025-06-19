@@ -1,6 +1,9 @@
 #include "thread_socket.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include "usart.h"
+#include "pc_protocol.h"
 
 // TCP socket相关参数定义在这个文件中
 NX_TCP_SOCKET tcp_socket;
@@ -8,43 +11,27 @@ NX_TCP_SOCKET tcp_socket;
 
 // 消息缓冲区
 #define MAX_MESSAGE_SIZE 256
-static char message_buffer[MAX_MESSAGE_SIZE];
+uint8_t command_buffer[MAX_MESSAGE_SIZE] = {0};
+struct pc_unpack_data_t pc_unpack_data = {0};
+static void pc_command_unpack(uint8_t *buffer);
 
-// 发送带时间戳、IP地址和端口号的消息
-UINT send_message_with_timestamp(const char* message)
+
+UINT nx_send(NX_TCP_SOCKET *socket, uint8_t *data, uint32_t len)
 {
     NX_PACKET *packet_ptr;
-    UINT status;
-    char timestamp_message[MAX_MESSAGE_SIZE];
-    ULONG current_time = HAL_GetTick(); // 获取HAL时间戳
-    ULONG ip_address = ip0_address;
-    UINT port;
-    
-    // 获取当前IP地址和端口号
-    nx_ip_address_get(&ip_0, &ip_address, NULL);
-    port = TCP_SERVER_PORT;
-    
-    // 格式化消息，添加时间戳、IP地址和端口号
-    snprintf(timestamp_message, MAX_MESSAGE_SIZE, "[%lu ms][%lu.%lu.%lu.%lu:%d] %s", 
-             current_time, 
-             (ip_address >> 24) & 0xFF,
-             (ip_address >> 16) & 0xFF,
-             (ip_address >> 8) & 0xFF,
-             ip_address & 0xFF,
-             port,
-             message);
-    
+    UINT status = 0;
+
     // 分配数据包
-    status = nx_packet_allocate(&pool_0, &packet_ptr, NX_TCP_PACKET, NX_WAIT_FOREVER);
+    status |= nx_packet_allocate(&pool_0, &packet_ptr, NX_TCP_PACKET, NX_WAIT_FOREVER);
     if (status != NX_SUCCESS)
     {
         return status;
     }
-    
+
     // 将消息附加到数据包
     status = nx_packet_data_append(packet_ptr, 
-                                  (VOID *)timestamp_message, 
-                                  strlen(timestamp_message), 
+                                  (VOID *)data, 
+                                  len, 
                                   &pool_0, 
                                   NX_WAIT_FOREVER);
     if (status != NX_SUCCESS)
@@ -54,12 +41,29 @@ UINT send_message_with_timestamp(const char* message)
     }
     
     // 发送数据包
-    status = nx_tcp_socket_send(&tcp_socket, packet_ptr, NX_WAIT_FOREVER);
+    status = nx_tcp_socket_send(socket, packet_ptr, NX_WAIT_FOREVER);
     if (status != NX_SUCCESS)
     {
         nx_packet_release(packet_ptr);
     }
     
+    return status;
+
+}
+
+UINT nx_receive(NX_TCP_SOCKET *socket, uint8_t *data, ULONG *len)
+{
+    NX_PACKET *packet_ptr;
+    UINT status = 0;
+    
+    status = nx_tcp_socket_receive(socket, &packet_ptr, NX_WAIT_FOREVER);
+    if (status == NX_SUCCESS)
+    {
+         // 读取数据包内容
+        status = nx_packet_data_retrieve(packet_ptr, data, len);
+        // 释放数据包
+        nx_packet_release(packet_ptr);
+    }
     return status;
 }
 
@@ -98,30 +102,59 @@ void thread_socket_entry(ULONG thread_input)
             return;
         }
 
-        // 发送连接成功消息
-        send_message_with_timestamp("client connected");
-
         while (1)
         {
-            // 接收数据包
-            status = nx_tcp_socket_receive(&tcp_socket, &receive_packet, NX_WAIT_FOREVER);
-            if (status == NX_SUCCESS) {
-                // 读取数据包内容
-                status = nx_packet_data_retrieve(receive_packet, message_buffer, &bytes_read);
-                if (status == NX_SUCCESS && bytes_read > 0) {
-                    // 确保字符串以null结尾
-                    message_buffer[bytes_read < MAX_MESSAGE_SIZE? bytes_read : MAX_MESSAGE_SIZE - 1] = '\0';
-                    // 添加时间戳并回显收到的消息
-                    send_message_with_timestamp(message_buffer);
-                }
-                // 释放数据包
-                nx_packet_release(receive_packet);
-            } else if (status == NX_NOT_CONNECTED) {
-                // 接受新连接
+            ULONG len = 0;
+            status = nx_receive(&tcp_socket, command_buffer, &len);
+            if (status == NX_NOT_CONNECTED) {
                 nx_tcp_server_socket_unaccept(&tcp_socket);
                 nx_tcp_server_socket_relisten(&ip_0, TCP_SERVER_PORT, &tcp_socket);
                 break;
             }
+            pc_command_unpack(command_buffer);
         }  
     }
 }
+
+static void pc_command_unpack(uint8_t *buffer)
+{
+    struct gimbal_protocol_t *command_packet = (struct gimbal_protocol_t *)buffer;
+    uint8_t data[8];
+    uint16_t crc;
+
+    if (command_packet->head != pc_protocol_head)
+    {
+        return;
+    }
+
+    if (command_packet->source_addr != pc_addr)
+    {
+        return;
+    }
+
+    if (command_packet->target_addr != mcu_addr)
+    {
+        return;
+    }
+
+    if (command_packet->data_length >= sizeof(data))
+    {
+        return;
+    }
+
+    memcpy(&crc, buffer+sizeof(struct gimbal_protocol_t)+command_packet->data_length, 2);
+    if (!checkRxCRC(buffer, sizeof(struct gimbal_protocol_t)+command_packet->data_length, crc))
+    {
+        return;
+    }
+
+    memcpy(&data, buffer+sizeof(struct gimbal_protocol_t), command_packet->data_length);
+    pc_unpack_data.function_code = command_packet->function_code;
+    pc_unpack_data.data_length = command_packet->data_length;
+    memcpy(pc_unpack_data.data, data, command_packet->data_length);
+    tx_semaphore_put(&pc_unpack_semaphore);
+}
+
+
+
+

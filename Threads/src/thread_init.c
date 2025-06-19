@@ -5,6 +5,8 @@
 #include "usart.h"
 #include "fdcan.h"
 #include <stdint.h>
+#include "pc_protocol.h"
+#include "gimbal.h"
 
 // ---------thread parameters
 // thread init parameters
@@ -20,15 +22,19 @@ void thread_init(ULONG input);
 TX_THREAD thread_socket_block;
 uint64_t thread_socket_stack[THREAD_SOCKET_STACK_SIZE/8];
 
+
 // tx kits create
 // sem
+TX_SEMAPHORE pc_unpack_semaphore;
 void semaphore_create(void)
 {
-	tx_semaphore_create(&rs422.rx_semaphore, "rs422_rx_semaphore", 0);
-	tx_semaphore_create(&rs485.rx_semaphore, "rs485_rx_semaphore", 0);
-	tx_semaphore_create(&rs232.rx_semaphore, "rs232_rx_semaphore", 0);
-	tx_semaphore_create(&usb_c.rx_semaphore, "usb_c_rx_semaphore", 0);
+	// tx_semaphore_create(&rs422.rx_semaphore, "rs422_rx_semaphore", 0);
+	// tx_semaphore_create(&rs485.rx_semaphore, "rs485_rx_semaphore", 0);
+	// tx_semaphore_create(&rs232.rx_semaphore, "rs232_rx_semaphore", 0);
+	// tx_semaphore_create(&usb_c.rx_semaphore, "usb_c_rx_semaphore", 0);
+	tx_semaphore_create(&pc_unpack_semaphore, "pc_unpack_semaphore", 0);
 }
+
 
 // ---------netxduo parameters
 NX_PACKET_POOL    pool_0;
@@ -53,10 +59,10 @@ void  tx_application_define(void *first_unused_memory)
 {
 	semaphore_create();
 
-	serial_start(&rs422, &huart2, SERIAL_RX_DMA_IDLE);
-	serial_start(&rs485, &huart1, SERIAL_RX_DMA_IDLE);
-	serial_start(&rs232, &huart6, SERIAL_RX_DMA_IDLE);
-	serial_start(&usb_c, &huart10, SERIAL_RX_DMA_IDLE);
+	// serial_start(&rs422, &huart2, SERIAL_RX_DMA_IDLE);
+	// serial_start(&rs485, &huart1, SERIAL_RX_DMA_IDLE);
+	// serial_start(&rs232, &huart6, SERIAL_RX_DMA_IDLE);
+	// serial_start(&usb_c, &huart10, SERIAL_RX_DMA_IDLE);
 	fdcan1_start();
 	
 	UINT nx_init_status = 0;
@@ -101,6 +107,8 @@ void  tx_application_define(void *first_unused_memory)
 }
 
 
+static void send_to_gimbal(struct pc_unpack_data_t *pc_unpack_data);
+
 void thread_init(ULONG input)  // 将UINT改为ULONG
 {
 	// 创建socket线程
@@ -116,40 +124,32 @@ void thread_init(ULONG input)  // 将UINT改为ULONG
 		TX_AUTO_START);
 	
 	while (1) {
-		if (tx_semaphore_get(&rs422.rx_semaphore, TX_NO_WAIT) == TX_SUCCESS)
+		// 等待来自上位机gimbal unpack后的信号量并发送给gimbal can
+		if (tx_semaphore_get(&pc_unpack_semaphore, TX_NO_WAIT) == TX_SUCCESS)
 		{
-			serial_block_write(&rs422, rs422.rx_buffer_mirror, rs422.size);
+			send_to_gimbal(&pc_unpack_data);
 		}
-		if (tx_semaphore_get(&rs485.rx_semaphore, TX_NO_WAIT) == TX_SUCCESS)
-		{
-			serial_485_block_write(&rs485, rs485.rx_buffer_mirror, rs485.size);
-		}
-		if (tx_semaphore_get(&rs232.rx_semaphore, TX_NO_WAIT) == TX_SUCCESS)
-		{
-			serial_block_write(&rs232, rs232.rx_buffer_mirror, rs232.size);
-		}
-		if (tx_semaphore_get(&usb_c.rx_semaphore, TX_NO_WAIT) == TX_SUCCESS)
-		{
-			serial_block_write(&usb_c, usb_c.rx_buffer_mirror, usb_c.size);
-		}
-		if (fdcan_rx_flag)
+		// 等待来自can的数据并根据协议发送给上位机
+		if (fdcan_rx_flag == 1)
 		{
 			fdcan_rx_flag = 0;
-			struct fdcan_tx_frame fdcan_tx_frame;
-			fdcan_tx_frame.header.Identifier = 0x123;
-			fdcan_tx_frame.header.IdType = FDCAN_STANDARD_ID;
-			fdcan_tx_frame.header.TxFrameType = FDCAN_DATA_FRAME;
-			fdcan_tx_frame.header.DataLength = (uint32_t)fdcan_rx_frame.header.DataLength;
-			fdcan_tx_frame.header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-			fdcan_tx_frame.header.BitRateSwitch = FDCAN_BRS_OFF;
-			fdcan_tx_frame.header.FDFormat = FDCAN_CLASSIC_CAN;
-			fdcan_tx_frame.header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
-			fdcan_tx_frame.header.MessageMarker = 0;
-			memcpy(fdcan_tx_frame.data, fdcan_rx_frame.data, fdcan_rx_frame.header.DataLength);
-			fdcan1_send(&fdcan_tx_frame);
+			gimbal_parse(&fdcan_rx_frame, &gimbal, fdcan_rx_frame.data);
 		}
 		sleep_ms(1);
 	}
 }
+
+
+static void send_to_gimbal(struct pc_unpack_data_t *pc_unpack_data)
+{
+	int index = get_index_pc_function_code(pc_unpack_data->function_code);
+	if (index != -1)
+	{
+		pc2gimbal_pack[index](pc_unpack_data->data);
+	}
+}
+
+
+
 
 
