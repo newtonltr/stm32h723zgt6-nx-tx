@@ -45,17 +45,17 @@ void MX_FDCAN1_Init(void)
   hfdcan1.Init.AutoRetransmission = DISABLE;
   hfdcan1.Init.TransmitPause = DISABLE;
   hfdcan1.Init.ProtocolException = DISABLE;
-  hfdcan1.Init.NominalPrescaler = 5;
+  hfdcan1.Init.NominalPrescaler = 13;
   hfdcan1.Init.NominalSyncJumpWidth = 12;
-  hfdcan1.Init.NominalTimeSeg1 = 39;
-  hfdcan1.Init.NominalTimeSeg2 = 12;
+  hfdcan1.Init.NominalTimeSeg1 = 7;
+  hfdcan1.Init.NominalTimeSeg2 = 2;
   hfdcan1.Init.DataPrescaler = 5;
   hfdcan1.Init.DataSyncJumpWidth = 12;
   hfdcan1.Init.DataTimeSeg1 = 32;
   hfdcan1.Init.DataTimeSeg2 = 16;
   hfdcan1.Init.MessageRAMOffset = 0;
   hfdcan1.Init.StdFiltersNbr = 1;
-  hfdcan1.Init.ExtFiltersNbr = 0;
+  hfdcan1.Init.ExtFiltersNbr = 1;
   hfdcan1.Init.RxFifo0ElmtsNbr = 32;
   hfdcan1.Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_8;
   hfdcan1.Init.RxFifo1ElmtsNbr = 32;
@@ -154,17 +154,29 @@ void fdcan1_start(void)
 {
 	FDCAN_FilterTypeDef filter_config;
 
-  filter_config.IdType        = FDCAN_STANDARD_ID;
+  // filter_config.IdType        = FDCAN_STANDARD_ID;
+  // filter_config.FilterIndex   = 0;
+  // filter_config.FilterType    = FDCAN_FILTER_MASK;
+  // filter_config.FilterConfig  = FDCAN_FILTER_TO_RXFIFO0;
+  // filter_config.FilterID1     = 0x0000;
+  // filter_config.FilterID2     = 0x0000;
+
+  
+  // if(HAL_FDCAN_ConfigFilter(&hfdcan1,&filter_config)!=HAL_OK) {
+  //   Error_Handler();
+	// }
+
+  filter_config.IdType        = FDCAN_EXTENDED_ID;
   filter_config.FilterIndex   = 0;
   filter_config.FilterType    = FDCAN_FILTER_MASK;
   filter_config.FilterConfig  = FDCAN_FILTER_TO_RXFIFO0;
-  filter_config.FilterID1     = 0x0000;
-  filter_config.FilterID2     = 0x0000;
+  filter_config.FilterID1     = 0x00000000;
+  filter_config.FilterID2     = 0x00000000;
 
-  
   if(HAL_FDCAN_ConfigFilter(&hfdcan1,&filter_config)!=HAL_OK) {
     Error_Handler();
 	}
+
   if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan1,FDCAN_REJECT,FDCAN_REJECT,DISABLE,ENABLE) != HAL_OK) {
     Error_Handler();
   }
