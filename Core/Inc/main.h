@@ -70,9 +70,33 @@ void Error_Handler(void);
 #define USART1_CK_GPIO_Port GPIOD
 
 /* USER CODE BEGIN Private defines */
+
+// 默认mac地址和ip地址
+
+#define DEFAULT_IP_ADDR0                        192
+#define DEFAULT_IP_ADDR1                        168
+#define DEFAULT_IP_ADDR2                        1
+#define DEFAULT_IP_ADDR3                        111
+
+#define FLASH_HEAD 0x55
+#define FLASH_TAIL 0xAA
+struct socket_param_t
+{
+  uint8_t flash_head;
+  uint8_t mac_address[6];
+  uint32_t ip_address;
+  uint8_t flash_tail;
+};
+
+extern struct socket_param_t socket_param_data;
+extern const uint32_t socket_param_data_address;
+extern uint8_t default_mac_address[6];
+extern uint32_t default_ip_address;
+
 void sleep_s(uint32_t s);
 void sleep_ms(uint32_t ms);
 void sleep_us(uint32_t us);
+
 
 /* USER CODE BEGIN Private defines */
 #define CONVERTER_PROTOCOL_HEAD 0XAA
@@ -83,6 +107,10 @@ enum frame_type_list {
   CAN_REMOTE_FRAME,
 };
 
+enum comm_type_list {
+  COMM_TYPE_UART,
+  COMM_TYPE_TCP,
+};
 
 __packed struct can_pack_protocol_head {
   uint8_t head;

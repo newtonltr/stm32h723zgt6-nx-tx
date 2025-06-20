@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include "pc_protocol.h"
 #include "gimbal.h"
+#include "emb_flash.h"
 
 // ---------thread parameters
 // thread init parameters
@@ -31,10 +32,13 @@ void semaphore_create(void)
 	// tx_semaphore_create(&rs422.rx_semaphore, "rs422_rx_semaphore", 0);
 	// tx_semaphore_create(&rs485.rx_semaphore, "rs485_rx_semaphore", 0);
 	// tx_semaphore_create(&rs232.rx_semaphore, "rs232_rx_semaphore", 0);
-	// tx_semaphore_create(&usb_c.rx_semaphore, "usb_c_rx_semaphore", 0);
+	tx_semaphore_create(&usb_c.rx_semaphore, "usb_c_rx_semaphore", 0);
 	tx_semaphore_create(&pc_unpack_semaphore, "pc_unpack_semaphore", 0);
 }
-
+void mutex_create(void)
+{
+	tx_mutex_create(&pc_unpack_mutex, "pc_unpack_mutex", TX_NO_INHERIT);
+}
 
 // ---------netxduo parameters
 NX_PACKET_POOL    pool_0;
@@ -43,12 +47,12 @@ NX_IP             ip_0;
 ULONG  packet_pool_area[NX_PACKET_POOL_SIZE/4 + 4] __attribute__((section(".NetXPoolSection")));
 ULONG  arp_space_area[52*20 / sizeof(ULONG)] __attribute__((section(".NetXPoolSection")));
 
-#define IP_ADDR0                        192
-#define IP_ADDR1                        168
-#define IP_ADDR2                        1
-#define IP_ADDR3                        111
+// #define DEFAULT_IP_ADDR0                        192
+// #define DEFAULT_IP_ADDR1                        168
+// #define DEFAULT_IP_ADDR2                        1
+// #define DEFAULT_IP_ADDR3                        111
 
-ULONG  ip0_address = IP_ADDRESS(IP_ADDR0, IP_ADDR1, IP_ADDR2, IP_ADDR3);
+ULONG  ip0_address = IP_ADDRESS(DEFAULT_IP_ADDR0, DEFAULT_IP_ADDR1, DEFAULT_IP_ADDR2, DEFAULT_IP_ADDR3);
 
 #define  THREAD_NETX_IP0_PRIO0                          2u
 #define  THREAD_NETX_IP0_STK_SIZE                     	1024*16u
@@ -58,17 +62,18 @@ static   uint64_t  thread_netx_ip0_stack[THREAD_NETX_IP0_STK_SIZE/8];
 void  tx_application_define(void *first_unused_memory)
 {
 	semaphore_create();
-
+	mutex_create();
 	// serial_start(&rs422, &huart2, SERIAL_RX_DMA_IDLE);
 	// serial_start(&rs485, &huart1, SERIAL_RX_DMA_IDLE);
 	// serial_start(&rs232, &huart6, SERIAL_RX_DMA_IDLE);
-	// serial_start(&usb_c, &huart10, SERIAL_RX_DMA_IDLE);
+	serial_start(&usb_c, &huart10, SERIAL_RX_DMA_IDLE);
 	fdcan1_start();
 	
 	UINT nx_init_status = 0;
 
 	HAL_ETH_DeInit(&heth);
 	nx_system_initialize();
+	ip0_address = (ULONG)socket_param_data.ip_address;
 	nx_init_status |= nx_packet_pool_create(&pool_0,
 									"NetX Main Packet Pool",
 									1536,  (ULONG*)(((int)packet_pool_area + 15) & ~15) ,
@@ -124,6 +129,14 @@ void thread_init(ULONG input)  // 将UINT改为ULONG
 		TX_AUTO_START);
 	
 	while (1) {
+		// 等待来自串口的信号量
+		if (tx_semaphore_get(&usb_c.rx_semaphore, TX_NO_WAIT) == TX_SUCCESS)
+		{
+			uint8_t buffer[sizeof(struct pc_comm_protocol_t) + 8 + 2];
+			memcpy(buffer, usb_c.rx_buffer_mirror, sizeof(struct pc_comm_protocol_t) + 8 + 2);
+			pc_command_unpack(buffer, COMM_TYPE_UART);
+		}
+
 		// 等待来自上位机gimbal unpack后的信号量并发送给gimbal can
 		if (tx_semaphore_get(&pc_unpack_semaphore, TX_NO_WAIT) == TX_SUCCESS)
 		{
@@ -145,11 +158,8 @@ static void send_to_gimbal(struct pc_unpack_data_t *pc_unpack_data)
 	int index = get_index_pc_function_code(pc_unpack_data->function_code);
 	if (index != -1)
 	{
-		pc2gimbal_pack[index](pc_unpack_data->data);
+		pc2gimbal_pack[index](pc_unpack_data);
 	}
 }
-
-
-
 
 

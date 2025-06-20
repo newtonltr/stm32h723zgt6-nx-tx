@@ -98,11 +98,15 @@ enum protocol_function_code_e
     PC_GIMBAL_PRESET_POINT          = 0x00CA,	///< 7.3.2 云台预置点设置（设置/召回/删除）
     PC_GIMBAL_CAMERA_PARAM_QUERY    = 0x00CB,	///< 7.3.3 云台相机参数查询（变倍值/聚焦值）
     PC_GIMBAL_CAMERA_PARAM_SET      = 0x00CC,	///< 7.3.4 云台相机参数设置（变倍值/聚焦值）
-    PC_GIMBAL_CAMERA_ADJUST         = 0x00CD	///< 7.3.5 云台相机±量设置（变倍-/变倍+、变焦-/变焦+、光圈-/光圈+）
+    PC_GIMBAL_CAMERA_ADJUST         = 0x00CD,	///< 7.3.5 云台相机±量设置（变倍-/变倍+、变焦-/变焦+、光圈-/光圈+）
+
+    // user
+    PC_MAC_ADDR_SET               = 0x00D1,  /// 自定义功能码，设置mac地址
+    PC_IP_ADDR_SET                = 0x00D2,  /// 自定义功能码，设置ip地址
 };
 
 // gimbal protocol
-struct __attribute__((packed)) gimbal_protocol_t
+struct __attribute__((packed)) pc_comm_protocol_t
 {
 	uint8_t head;
 	uint8_t source_addr;
@@ -116,12 +120,13 @@ struct pc_unpack_data_t
 	uint16_t function_code;
 	uint8_t data[8];
 	uint16_t data_length;
+	uint8_t comm_type;
 };
 
 int get_index_gimbal_key(uint16_t key);
 int get_index_pc_function_code(uint16_t function_code);
 
-extern void (*pc2gimbal_pack[])(uint8_t *buff);
+extern void (*pc2gimbal_pack[])(struct pc_unpack_data_t *pc_unpack_data);
 
 
 #endif

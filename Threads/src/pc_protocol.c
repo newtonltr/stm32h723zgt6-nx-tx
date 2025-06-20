@@ -4,6 +4,7 @@
 #include "usart.h"
 #include "gimbal.h"
 #include "thread_socket.h"
+#include "emb_flash.h"
 
 
 const uint16_t gimbal_key[] = {
@@ -77,6 +78,8 @@ const uint16_t pc_function_code[] = {
 	PC_GIMBAL_CAMERA_PARAM_QUERY,
 	PC_GIMBAL_CAMERA_PARAM_SET,
 	PC_GIMBAL_CAMERA_ADJUST,
+	PC_MAC_ADDR_SET,
+	PC_IP_ADDR_SET,
 };
 
 
@@ -107,14 +110,16 @@ int get_index_pc_function_code(uint16_t function_code) // 获取pc功能码在�
 
 // 解包pc数据后通过can发送给云台
 
-static void pc_gimbal_control(uint8_t *buff);				// functioncode = PC_GIMBAL_CONTROL 0x00C3
-static void pc_gimbal_angle_query(uint8_t *buff);			// functioncode = PC_GIMBAL_ANGLE_QUERY 0x00C4
-static void pc_gimbal_aux_switch_control(uint8_t *buff);	// functioncode = PC_GIMBAL_AUX_SWITCH_CONTROL 0x00C5
-static void pc_gimbal_preset_point(uint8_t *buff);			// functioncode = PC_GIMBAL_PRESET_POINT 0x00CA
-static void pc_gimbal_camera_param_query(uint8_t *buff);	// functioncode = PC_GIMBAL_CAMERA_PARAM_QUERY 0x00CB
-static void pc_gimbal_camera_param_set(uint8_t *buff);		// functioncode = PC_GIMBAL_CAMERA_PARAM_SET 0x00CC
-static void pc_gimbal_camera_adjust(uint8_t *buff);			// functioncode = PC_GIMBAL_CAMERA_ADJUST 0x00CD
-void (*pc2gimbal_pack[])(uint8_t *buff) =
+static void pc_gimbal_control(struct pc_unpack_data_t *pc_unpack_data);				// functioncode = PC_GIMBAL_CONTROL 0x00C3
+static void pc_gimbal_angle_query(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_GIMBAL_ANGLE_QUERY 0x00C4
+static void pc_gimbal_aux_switch_control(struct pc_unpack_data_t *pc_unpack_data);	// functioncode = PC_GIMBAL_AUX_SWITCH_CONTROL 0x00C5
+static void pc_gimbal_preset_point(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_GIMBAL_PRESET_POINT 0x00CA
+static void pc_gimbal_camera_param_query(struct pc_unpack_data_t *pc_unpack_data);	// functioncode = PC_GIMBAL_CAMERA_PARAM_QUERY 0x00CB
+static void pc_gimbal_camera_param_set(struct pc_unpack_data_t *pc_unpack_data);		// functioncode = PC_GIMBAL_CAMERA_PARAM_SET 0x00CC
+static void pc_gimbal_camera_adjust(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_GIMBAL_CAMERA_ADJUST 0x00CD
+static void pc_mac_addr_set(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_MAC_ADDR_SET 0x00D2
+static void pc_ip_addr_set(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_IP_ADDR_SET 0x00D3
+void (*pc2gimbal_pack[])(struct pc_unpack_data_t *pc_unpack_data) =
 {
 	pc_gimbal_control,
 	pc_gimbal_angle_query,
@@ -123,36 +128,46 @@ void (*pc2gimbal_pack[])(uint8_t *buff) =
 	pc_gimbal_camera_param_query,
 	pc_gimbal_camera_param_set,
 	pc_gimbal_camera_adjust,
+	pc_mac_addr_set,
+	pc_ip_addr_set,
 };
 
 
-static void send_to_pc(uint16_t function_code, uint8_t *buff, uint16_t len)
+static void send_to_pc(uint16_t function_code, uint8_t *buff, uint16_t len, uint8_t comm_type)
 {
 	uint16_t crc = 0;
-	uint8_t send_buf[sizeof(struct gimbal_protocol_t) + 8 + 2] = {0};	// 预留8个字节数据，2个字节crc
+	uint8_t send_buf[sizeof(struct pc_comm_protocol_t) + 8 + 2] = {0};	// 预留8个字节数据，2个字节crc
 
-	struct gimbal_protocol_t gimbal_protocol;
+	struct pc_comm_protocol_t gimbal_protocol;
 	gimbal_protocol.head = pc_protocol_head;
 	gimbal_protocol.source_addr = mcu_addr;
 	gimbal_protocol.target_addr = pc_addr;
 	gimbal_protocol.function_code = function_code;
 	gimbal_protocol.data_length = len;
 
-	memcpy(send_buf, &gimbal_protocol, sizeof(struct gimbal_protocol_t));
+	memcpy(send_buf, &gimbal_protocol, sizeof(struct pc_comm_protocol_t));
 
 	if(len > 0 && buff != NULL && len < 8){
-		memcpy(send_buf + sizeof(struct gimbal_protocol_t), buff, len);
+		memcpy(send_buf + sizeof(struct pc_comm_protocol_t), buff, len);
 	}
 
-	crc = CRC16(send_buf, sizeof(struct gimbal_protocol_t) + len);
-	memcpy(send_buf + sizeof(struct gimbal_protocol_t) + len, &crc, 2);
+	crc = CRC16(send_buf, sizeof(struct pc_comm_protocol_t) + len);
+	memcpy(send_buf + sizeof(struct pc_comm_protocol_t) + len, &crc, 2);
 	
-	nx_send(&tcp_socket, send_buf, sizeof(struct gimbal_protocol_t) + len + 2);
+	if(comm_type == COMM_TYPE_TCP)
+	{
+		nx_send(&tcp_socket, send_buf, sizeof(struct pc_comm_protocol_t) + len + 2);
+	}
+	else if(comm_type == COMM_TYPE_UART)
+	{
+		serial_block_write(&usb_c, send_buf, sizeof(struct pc_comm_protocol_t) + len + 2);
+	}
 
 }
 
-static void pc_gimbal_control(uint8_t *buff)
+static void pc_gimbal_control(struct pc_unpack_data_t *pc_unpack_data)
 {
+	uint8_t *buff = pc_unpack_data->data;
 	uint16_t yaw;
 	uint16_t pitch;
 	double yaw_fp;
@@ -179,12 +194,13 @@ static void pc_gimbal_control(uint8_t *buff)
 		gimbal_sync_move_to(&gimbal,yaw_fp,pitch_fp);
 	}
 
-	send_to_pc(PC_GIMBAL_CONTROL, NULL, 0);
+	send_to_pc(PC_GIMBAL_CONTROL, NULL, 0, pc_unpack_data->comm_type);
 
 }
 
-static void pc_gimbal_angle_query(uint8_t *buff)
+static void pc_gimbal_angle_query(struct pc_unpack_data_t *pc_unpack_data)
 {
+	uint8_t *buff = pc_unpack_data->data;
 	uint16_t yaw;
 	uint16_t pitch;
 	uint8_t data[32] = {0};
@@ -212,12 +228,13 @@ static void pc_gimbal_angle_query(uint8_t *buff)
 		
 	}
 
-	send_to_pc(PC_GIMBAL_ANGLE_QUERY, data, 5);
+	send_to_pc(PC_GIMBAL_ANGLE_QUERY, data, 5, pc_unpack_data->comm_type);
 	
 }
 
-static void pc_gimbal_aux_switch_control(uint8_t *buff)
+static void pc_gimbal_aux_switch_control(struct pc_unpack_data_t *pc_unpack_data)
 {
+	uint8_t *buff = pc_unpack_data->data;
 	uint16_t opt = buff[0];
 	uint8_t val = buff[1];
 	
@@ -240,11 +257,12 @@ static void pc_gimbal_aux_switch_control(uint8_t *buff)
 		
 	}
 
-	send_to_pc(PC_GIMBAL_AUX_SWITCH_CONTROL, NULL, 0);
+	send_to_pc(PC_GIMBAL_AUX_SWITCH_CONTROL, NULL, 0, pc_unpack_data->comm_type);
 }
 
-static void pc_gimbal_preset_point(uint8_t *buff)
+static void pc_gimbal_preset_point(struct pc_unpack_data_t *pc_unpack_data)
 {
+	uint8_t *buff = pc_unpack_data->data;
 	uint16_t opt = buff[0];
 	uint8_t val = buff[1];
 	
@@ -261,12 +279,13 @@ static void pc_gimbal_preset_point(uint8_t *buff)
 		
 	}
 
-	send_to_pc(PC_GIMBAL_PRESET_POINT, NULL, 0);
+	send_to_pc(PC_GIMBAL_PRESET_POINT, NULL, 0, pc_unpack_data->comm_type);
 	
 }
 
-static void pc_gimbal_camera_param_query(uint8_t *buff)
+static void pc_gimbal_camera_param_query(struct pc_unpack_data_t *pc_unpack_data)
 {
+	uint8_t *buff = pc_unpack_data->data;
 	uint8_t data[3] = {0};
 	uint16_t value = 0;
 
@@ -292,11 +311,12 @@ static void pc_gimbal_camera_param_query(uint8_t *buff)
 
 	data[1] = (value>>8) & 0xff;
 	data[2] = (value>>0) & 0xff;
-	send_to_pc(PC_GIMBAL_CAMERA_PARAM_QUERY, data, sizeof(data));
+	send_to_pc(PC_GIMBAL_CAMERA_PARAM_QUERY, data, sizeof(data), pc_unpack_data->comm_type);
 }
 
-static void pc_gimbal_camera_param_set(uint8_t *buff)
+static void pc_gimbal_camera_param_set(struct pc_unpack_data_t *pc_unpack_data)
 {
+	uint8_t *buff = pc_unpack_data->data;
 	uint16_t value = (uint16_t)((buff[1]<<8)+buff[2]);
 
 	if(buff[0] == 0){
@@ -309,12 +329,13 @@ static void pc_gimbal_camera_param_set(uint8_t *buff)
 		
 	}
 
-	send_to_pc(PC_GIMBAL_CAMERA_PARAM_SET, NULL, 0);
+	send_to_pc(PC_GIMBAL_CAMERA_PARAM_SET, NULL, 0, pc_unpack_data->comm_type);
 
 }
 
-static void pc_gimbal_camera_adjust(uint8_t *buff)
+static void pc_gimbal_camera_adjust(struct pc_unpack_data_t *pc_unpack_data)
 {
+	uint8_t *buff = pc_unpack_data->data;
 	uint16_t opt = buff[0];
 	uint8_t val = buff[1];
 	
@@ -331,7 +352,78 @@ static void pc_gimbal_camera_adjust(uint8_t *buff)
 		
 	}
 
-	send_to_pc(PC_GIMBAL_CAMERA_ADJUST, NULL, 0);
+	send_to_pc(PC_GIMBAL_CAMERA_ADJUST, NULL, 0, pc_unpack_data->comm_type);
 
 }
+
+
+static void pc_mac_addr_set(struct pc_unpack_data_t *pc_unpack_data)
+{
+	HAL_StatusTypeDef ret;
+	uint8_t *buff = pc_unpack_data->data;
+	socket_param_data.mac_address[0] = buff[0];
+	socket_param_data.mac_address[1] = buff[1];
+	socket_param_data.mac_address[2] = buff[2];
+	socket_param_data.mac_address[3] = buff[3];
+	socket_param_data.mac_address[4] = buff[4];
+	socket_param_data.mac_address[5] = buff[5];
+	
+	ret = emb_flash_write(socket_param_data_address, (uint32_t*)&socket_param_data, sizeof(struct socket_param_t));
+
+	if(ret == HAL_OK)
+	{
+		// 读取写入的数据，再将新旧mac地址比较，如果相同就发送pc新写入的mac地址，否则返回空数据
+		struct socket_param_t socket_param_data_read;
+		emb_flash_read(socket_param_data_address, (uint32_t*)&socket_param_data_read, sizeof(struct socket_param_t));
+		if(socket_param_data_read.flash_head == FLASH_HEAD && socket_param_data_read.flash_tail == FLASH_TAIL
+		 && memcmp(socket_param_data_read.mac_address, socket_param_data.mac_address, 6) == 0)
+		{
+			send_to_pc(PC_MAC_ADDR_SET, buff, 6, pc_unpack_data->comm_type);
+		}
+		else
+		{
+			// 写入默认mac地址
+			memcpy(socket_param_data.mac_address, default_mac_address, 6);
+			ret = emb_flash_write(socket_param_data_address, (uint32_t*)&socket_param_data, sizeof(struct socket_param_t));
+			send_to_pc(PC_MAC_ADDR_SET, NULL, 0, pc_unpack_data->comm_type);
+		}
+	}
+	else
+	{	// 写入失败，返回空数据
+		send_to_pc(PC_MAC_ADDR_SET, NULL, 0, pc_unpack_data->comm_type);
+	}
+}
+
+static void pc_ip_addr_set(struct pc_unpack_data_t *pc_unpack_data)
+{
+	HAL_StatusTypeDef ret;
+	uint8_t *buff = pc_unpack_data->data;
+	socket_param_data.ip_address = (uint32_t)((buff[0])+(buff[1]<<8)+(buff[2]<<16)+(buff[3]<<24));
+	ret = emb_flash_write(socket_param_data_address, (uint32_t*)&socket_param_data, sizeof(struct socket_param_t));
+
+	if(ret == HAL_OK)
+	{
+		// 读取写入的数据，再将新旧ip地址比较，如果相同就发送pc新写入的ip地址，否则返回空数据
+		struct socket_param_t socket_param_data_read;
+		emb_flash_read(socket_param_data_address, (uint32_t*)&socket_param_data_read, sizeof(struct socket_param_t));
+		if(socket_param_data_read.flash_head == FLASH_HEAD && socket_param_data_read.flash_tail == FLASH_TAIL
+		 && socket_param_data_read.ip_address == socket_param_data.ip_address)
+		{
+			send_to_pc(PC_IP_ADDR_SET, buff, 4, pc_unpack_data->comm_type);
+		}
+		else
+		{
+			// 写入默认ip地址
+			socket_param_data.ip_address = default_ip_address;
+			ret = emb_flash_write(socket_param_data_address, (uint32_t*)&socket_param_data, sizeof(struct socket_param_t));
+			send_to_pc(PC_IP_ADDR_SET, NULL, 0, pc_unpack_data->comm_type);
+		}
+	}
+	else
+	{	// 写入失败，返回空数据
+		send_to_pc(PC_IP_ADDR_SET, NULL, 0, pc_unpack_data->comm_type);
+	}
+
+}	
+
 

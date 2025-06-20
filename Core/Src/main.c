@@ -24,10 +24,11 @@
 #include "memorymap.h"
 #include "usart.h"
 #include "gpio.h"
+#include <stdint.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "emb_flash.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -73,6 +74,17 @@ void sleep_us(uint32_t us)
 	tx_thread_sleep(us/1000u);
 }
 
+// 默认mac地址和ip地址
+struct socket_param_t socket_param_data = {
+  .flash_head = FLASH_HEAD,
+  .mac_address = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01},
+  .ip_address = IP_ADDRESS(DEFAULT_IP_ADDR0, DEFAULT_IP_ADDR1, DEFAULT_IP_ADDR2, DEFAULT_IP_ADDR3),
+  .flash_tail = FLASH_TAIL,
+};
+uint8_t default_mac_address[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
+uint32_t default_ip_address = IP_ADDRESS(DEFAULT_IP_ADDR0, DEFAULT_IP_ADDR1, DEFAULT_IP_ADDR2, DEFAULT_IP_ADDR3);
+const uint32_t socket_param_data_address = 0x08080000;
+
 /* USER CODE END 0 */
 
 /**
@@ -110,6 +122,13 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
+  // 读取flash中的mac地址和ip地址(如果flash中没有数据，则使用默认数据)
+  struct socket_param_t socket_param_data_read;
+  emb_flash_read(socket_param_data_address, (uint32_t*)&socket_param_data_read, sizeof(struct socket_param_t));
+  if(socket_param_data_read.flash_head == FLASH_HEAD && socket_param_data_read.flash_tail == FLASH_TAIL)
+  {
+    memcpy(&socket_param_data, &socket_param_data_read, sizeof(struct socket_param_t));
+  }
 
   /* USER CODE END SysInit */
 

@@ -61,12 +61,12 @@ void MX_ETH_Init(void)
 
   /* USER CODE END ETH_Init 1 */
   heth.Instance = ETH;
-  MACAddr[0] = 0x02;
-  MACAddr[1] = 0x00;
-  MACAddr[2] = 0x00;
-  MACAddr[3] = 0x00;
-  MACAddr[4] = 0x00;
-  MACAddr[5] = 0x01;
+  MACAddr[0] = socket_param_data.mac_address[0];
+  MACAddr[1] = socket_param_data.mac_address[1];
+  MACAddr[2] = socket_param_data.mac_address[2];
+  MACAddr[3] = socket_param_data.mac_address[3];
+  MACAddr[4] = socket_param_data.mac_address[4];
+  MACAddr[5] = socket_param_data.mac_address[5];
   heth.Init.MACAddr = &MACAddr[0];
   heth.Init.MediaInterface = HAL_ETH_RMII_MODE;
   heth.Init.TxDesc = DMATxDscrTab;

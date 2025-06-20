@@ -4,6 +4,7 @@
 #include <string.h>
 #include "usart.h"
 #include "pc_protocol.h"
+#include "emb_flash.h"
 
 // TCP socket相关参数定义在这个文件中
 NX_TCP_SOCKET tcp_socket;
@@ -13,7 +14,6 @@ NX_TCP_SOCKET tcp_socket;
 #define MAX_MESSAGE_SIZE 256
 uint8_t command_buffer[MAX_MESSAGE_SIZE] = {0};
 struct pc_unpack_data_t pc_unpack_data = {0};
-static void pc_command_unpack(uint8_t *buffer);
 
 
 UINT nx_send(NX_TCP_SOCKET *socket, uint8_t *data, uint32_t len)
@@ -111,14 +111,18 @@ void thread_socket_entry(ULONG thread_input)
                 nx_tcp_server_socket_relisten(&ip_0, TCP_SERVER_PORT, &tcp_socket);
                 break;
             }
-            pc_command_unpack(command_buffer);
+            pc_command_unpack(command_buffer, COMM_TYPE_TCP);
         }  
     }
 }
 
-static void pc_command_unpack(uint8_t *buffer)
+
+// 添加互斥锁，防止多线程访问
+TX_MUTEX pc_unpack_mutex;
+void pc_command_unpack(uint8_t *buffer, uint8_t comm_type)
 {
-    struct gimbal_protocol_t *command_packet = (struct gimbal_protocol_t *)buffer;
+    tx_mutex_get(&pc_unpack_mutex, TX_WAIT_FOREVER);
+    struct pc_comm_protocol_t *command_packet = (struct pc_comm_protocol_t *)buffer;
     uint8_t data[8];
     uint16_t crc;
 
@@ -142,17 +146,19 @@ static void pc_command_unpack(uint8_t *buffer)
         return;
     }
 
-    memcpy(&crc, buffer+sizeof(struct gimbal_protocol_t)+command_packet->data_length, 2);
-    if (!checkRxCRC(buffer, sizeof(struct gimbal_protocol_t)+command_packet->data_length, crc))
+    memcpy(&crc, buffer+sizeof(struct pc_comm_protocol_t)+command_packet->data_length, 2);
+    if (!checkRxCRC(buffer, sizeof(struct pc_comm_protocol_t)+command_packet->data_length, crc))
     {
         return;
     }
 
-    memcpy(&data, buffer+sizeof(struct gimbal_protocol_t), command_packet->data_length);
+    memcpy(&data, buffer+sizeof(struct pc_comm_protocol_t), command_packet->data_length);
     pc_unpack_data.function_code = command_packet->function_code;
     pc_unpack_data.data_length = command_packet->data_length;
     memcpy(pc_unpack_data.data, data, command_packet->data_length);
+    pc_unpack_data.comm_type = comm_type;
     tx_semaphore_put(&pc_unpack_semaphore);
+    tx_mutex_put(&pc_unpack_mutex);
 }
 
 
