@@ -144,7 +144,7 @@ static void send_to_pc(uint16_t function_code, uint8_t *buff, uint16_t len)
 		memcpy(send_buf + sizeof(struct gimbal_protocol_t), buff, len);
 	}
 
-	crc = CRC16((uint8_t*)&gimbal_protocol, sizeof(gimbal_protocol));
+	crc = CRC16(send_buf, sizeof(struct gimbal_protocol_t) + len);
 	memcpy(send_buf + sizeof(struct gimbal_protocol_t) + len, &crc, 2);
 	
 	nx_send(&tcp_socket, send_buf, sizeof(struct gimbal_protocol_t) + len + 2);
