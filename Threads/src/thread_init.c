@@ -45,7 +45,7 @@ ULONG  arp_space_area[52*20 / sizeof(ULONG)] __attribute__((section(".NetXPoolSe
 
 #define IP_ADDR0                        192
 #define IP_ADDR1                        168
-#define IP_ADDR2                        110
+#define IP_ADDR2                        1
 #define IP_ADDR3                        111
 
 ULONG  ip0_address = IP_ADDRESS(IP_ADDR0, IP_ADDR1, IP_ADDR2, IP_ADDR3);
