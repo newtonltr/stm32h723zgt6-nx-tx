@@ -85,6 +85,8 @@ struct socket_param_t
   uint8_t flash_head;
   uint8_t mac_address[6];
   uint32_t ip_address;
+  uint32_t mask_address;
+  uint32_t gateway_address;
   uint8_t flash_tail;
 };
 
@@ -92,6 +94,8 @@ extern struct socket_param_t socket_param_data;
 extern const uint32_t socket_param_data_address;
 extern uint8_t default_mac_address[6];
 extern uint32_t default_ip_address;
+extern uint32_t default_mask_address;
+extern uint32_t default_gateway_address;
 
 void sleep_s(uint32_t s);
 void sleep_ms(uint32_t ms);

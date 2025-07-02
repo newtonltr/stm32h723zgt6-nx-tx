@@ -101,8 +101,10 @@ enum protocol_function_code_e
     PC_GIMBAL_CAMERA_ADJUST         = 0x00CD,	///< 7.3.5 云台相机±量设置（变倍-/变倍+、变焦-/变焦+、光圈-/光圈+）
 
     // user
-    PC_MAC_ADDR_SET               = 0x00D1,  /// 自定义功能码，设置mac地址
-    PC_IP_ADDR_SET                = 0x00D2,  /// 自定义功能码，设置ip地址
+    PC_MAC_ADDR_SET               = 0x01F1,  /// 自定义功能码，设置mac地址
+    PC_IP_ADDR_SET                = 0x01F2,  /// 自定义功能码，设置ip地址
+    PC_MASK_ADDR_SET              = 0x01F3,  /// 自定义功能码，设置掩码地址
+    PC_GATEWAY_ADDR_SET           = 0x01F4,  /// 自定义功能码，设置网关地址
 };
 
 // gimbal protocol

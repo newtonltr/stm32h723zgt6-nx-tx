@@ -79,10 +79,14 @@ struct socket_param_t socket_param_data = {
   .flash_head = FLASH_HEAD,
   .mac_address = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01},
   .ip_address = IP_ADDRESS(DEFAULT_IP_ADDR0, DEFAULT_IP_ADDR1, DEFAULT_IP_ADDR2, DEFAULT_IP_ADDR3),
+  .mask_address = IP_ADDRESS(255, 255, 255, 0),
+  .gateway_address = IP_ADDRESS(DEFAULT_IP_ADDR0, DEFAULT_IP_ADDR1, DEFAULT_IP_ADDR2, 1),
   .flash_tail = FLASH_TAIL,
 };
 uint8_t default_mac_address[6] = {0x02, 0x00, 0x00, 0x00, 0x00, 0x01};
 uint32_t default_ip_address = IP_ADDRESS(DEFAULT_IP_ADDR0, DEFAULT_IP_ADDR1, DEFAULT_IP_ADDR2, DEFAULT_IP_ADDR3);
+uint32_t default_mask_address = IP_ADDRESS(255, 255, 255, 0);
+uint32_t default_gateway_address = IP_ADDRESS(DEFAULT_IP_ADDR0, DEFAULT_IP_ADDR1, DEFAULT_IP_ADDR2, 1);
 const uint32_t socket_param_data_address = 0x08080000;
 
 /* USER CODE END 0 */

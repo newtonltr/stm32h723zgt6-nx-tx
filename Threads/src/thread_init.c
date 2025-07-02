@@ -47,12 +47,9 @@ NX_IP             ip_0;
 ULONG  packet_pool_area[NX_PACKET_POOL_SIZE/4 + 4] __attribute__((section(".NetXPoolSection")));
 ULONG  arp_space_area[52*20 / sizeof(ULONG)] __attribute__((section(".NetXPoolSection")));
 
-// #define DEFAULT_IP_ADDR0                        192
-// #define DEFAULT_IP_ADDR1                        168
-// #define DEFAULT_IP_ADDR2                        1
-// #define DEFAULT_IP_ADDR3                        111
-
 ULONG  ip0_address = IP_ADDRESS(DEFAULT_IP_ADDR0, DEFAULT_IP_ADDR1, DEFAULT_IP_ADDR2, DEFAULT_IP_ADDR3);
+ULONG  mask_address = IP_ADDRESS(255, 255, 255, 0);
+ULONG  gateway_address = IP_ADDRESS(DEFAULT_IP_ADDR0, DEFAULT_IP_ADDR1, DEFAULT_IP_ADDR2, 1);
 
 #define  THREAD_NETX_IP0_PRIO0                          2u
 #define  THREAD_NETX_IP0_STK_SIZE                     	1024*16u
@@ -73,7 +70,11 @@ void  tx_application_define(void *first_unused_memory)
 
 	HAL_ETH_DeInit(&heth);
 	nx_system_initialize();
+	
 	ip0_address = (ULONG)socket_param_data.ip_address;
+	mask_address = (ULONG)socket_param_data.mask_address;
+	gateway_address = (ULONG)socket_param_data.gateway_address;
+
 	nx_init_status |= nx_packet_pool_create(&pool_0,
 									"NetX Main Packet Pool",
 									1536,  (ULONG*)(((int)packet_pool_area + 15) & ~15) ,
@@ -81,7 +82,7 @@ void  tx_application_define(void *first_unused_memory)
 	nx_init_status |= nx_ip_create(&ip_0,
 						"NetX IP0",
 						ip0_address,
-						0xFFFFFF00UL,
+						mask_address,
 						&pool_0, nx_stm32_eth_driver,
 						(UCHAR*)thread_netx_ip0_stack,
 						sizeof(thread_netx_ip0_stack),
@@ -92,9 +93,7 @@ void  tx_application_define(void *first_unused_memory)
 	nx_init_status |= nx_udp_enable(&ip_0);
 	nx_init_status |= nx_icmp_enable(&ip_0);
 
-	ULONG gateway_ip = ip0_address;
-	gateway_ip = (gateway_ip & 0xFFFFFF00) | 0x01;
-	nx_ip_gateway_address_set(&ip_0, gateway_ip);
+	nx_ip_gateway_address_set(&ip_0, gateway_address);
 
 	sleep_ms(300);
 

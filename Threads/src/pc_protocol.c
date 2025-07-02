@@ -80,6 +80,8 @@ const uint16_t pc_function_code[] = {
 	PC_GIMBAL_CAMERA_ADJUST,
 	PC_MAC_ADDR_SET,
 	PC_IP_ADDR_SET,
+	PC_MASK_ADDR_SET,
+	PC_GATEWAY_ADDR_SET,
 };
 
 
@@ -117,8 +119,10 @@ static void pc_gimbal_preset_point(struct pc_unpack_data_t *pc_unpack_data);			/
 static void pc_gimbal_camera_param_query(struct pc_unpack_data_t *pc_unpack_data);	// functioncode = PC_GIMBAL_CAMERA_PARAM_QUERY 0x00CB
 static void pc_gimbal_camera_param_set(struct pc_unpack_data_t *pc_unpack_data);		// functioncode = PC_GIMBAL_CAMERA_PARAM_SET 0x00CC
 static void pc_gimbal_camera_adjust(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_GIMBAL_CAMERA_ADJUST 0x00CD
-static void pc_mac_addr_set(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_MAC_ADDR_SET 0x00D2
-static void pc_ip_addr_set(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_IP_ADDR_SET 0x00D3
+static void pc_mac_addr_set(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_MAC_ADDR_SET 0x00D1
+static void pc_ip_addr_set(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_IP_ADDR_SET 0x00D2
+static void pc_mask_addr_set(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_MASK_ADDR_SET 0x00D3
+static void pc_gateway_addr_set(struct pc_unpack_data_t *pc_unpack_data);		// functioncode = PC_GATEWAY_ADDR_SET 0x00D4
 void (*pc2gimbal_pack[])(struct pc_unpack_data_t *pc_unpack_data) =
 {
 	pc_gimbal_control,
@@ -130,6 +134,8 @@ void (*pc2gimbal_pack[])(struct pc_unpack_data_t *pc_unpack_data) =
 	pc_gimbal_camera_adjust,
 	pc_mac_addr_set,
 	pc_ip_addr_set,
+	pc_mask_addr_set,
+	pc_gateway_addr_set,
 };
 
 
@@ -426,4 +432,66 @@ static void pc_ip_addr_set(struct pc_unpack_data_t *pc_unpack_data)
 
 }	
 
+static void pc_mask_addr_set(struct pc_unpack_data_t *pc_unpack_data)
+{
+	HAL_StatusTypeDef ret;
+	uint8_t *buff = pc_unpack_data->data;
+	socket_param_data.mask_address = (uint32_t)((buff[0])+(buff[1]<<8)+(buff[2]<<16)+(buff[3]<<24));
+	ret = emb_flash_write(socket_param_data_address, (uint32_t*)&socket_param_data, sizeof(struct socket_param_t));
+
+	if(ret == HAL_OK)
+	{
+		// 读取写入的数据，再将新旧mask地址比较，如果相同就发送pc新写入的mask地址，否则返回空数据
+		struct socket_param_t socket_param_data_read;
+		emb_flash_read(socket_param_data_address, (uint32_t*)&socket_param_data_read, sizeof(struct socket_param_t));
+		if(socket_param_data_read.flash_head == FLASH_HEAD && socket_param_data_read.flash_tail == FLASH_TAIL
+		 && socket_param_data_read.mask_address == socket_param_data.mask_address)
+		{
+			send_to_pc(PC_MASK_ADDR_SET, buff, 4, pc_unpack_data->comm_type);
+		}
+		else
+		{
+			// 写入默认mask地址
+			socket_param_data.mask_address = default_mask_address;
+			ret = emb_flash_write(socket_param_data_address, (uint32_t*)&socket_param_data, sizeof(struct socket_param_t));
+			send_to_pc(PC_MASK_ADDR_SET, NULL, 0, pc_unpack_data->comm_type);
+		}
+	}
+	else
+	{
+		send_to_pc(PC_MASK_ADDR_SET, NULL, 0, pc_unpack_data->comm_type);
+	}
+}
+
+
+static void pc_gateway_addr_set(struct pc_unpack_data_t *pc_unpack_data)
+{
+	HAL_StatusTypeDef ret;
+	uint8_t *buff = pc_unpack_data->data;
+	socket_param_data.gateway_address = (uint32_t)((buff[0])+(buff[1]<<8)+(buff[2]<<16)+(buff[3]<<24));
+	ret = emb_flash_write(socket_param_data_address, (uint32_t*)&socket_param_data, sizeof(struct socket_param_t));
+
+	if(ret == HAL_OK)
+	{
+		// 读取写入的数据，再将新旧网关地址比较，如果相同就发送pc新写入的网关地址，否则返回空数据
+		struct socket_param_t socket_param_data_read;
+		emb_flash_read(socket_param_data_address, (uint32_t*)&socket_param_data_read, sizeof(struct socket_param_t));
+		if(socket_param_data_read.flash_head == FLASH_HEAD && socket_param_data_read.flash_tail == FLASH_TAIL
+		 && socket_param_data_read.gateway_address == socket_param_data.gateway_address)
+		{
+			send_to_pc(PC_GATEWAY_ADDR_SET, buff, 4, pc_unpack_data->comm_type);
+		}
+		else
+		{
+			// 写入默认网关地址
+			socket_param_data.gateway_address = default_gateway_address;
+			ret = emb_flash_write(socket_param_data_address, (uint32_t*)&socket_param_data, sizeof(struct socket_param_t));
+			send_to_pc(PC_GATEWAY_ADDR_SET, NULL, 0, pc_unpack_data->comm_type);
+		}
+	}
+	else
+	{
+		send_to_pc(PC_GATEWAY_ADDR_SET, NULL, 0, pc_unpack_data->comm_type);
+	}
+}
 
