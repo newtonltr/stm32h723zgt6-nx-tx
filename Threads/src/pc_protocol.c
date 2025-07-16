@@ -82,6 +82,11 @@ const uint16_t pc_function_code[] = {
 	PC_IP_ADDR_SET,
 	PC_MASK_ADDR_SET,
 	PC_GATEWAY_ADDR_SET,
+	PC_HARDFAULT_INFO_QUERY,
+	PC_MAC_ADDR_QUERY,
+	PC_IP_ADDR_QUERY,
+	PC_MASK_ADDR_QUERY,
+	PC_GATEWAY_ADDR_QUERY,
 };
 
 
@@ -119,10 +124,16 @@ static void pc_gimbal_preset_point(struct pc_unpack_data_t *pc_unpack_data);			/
 static void pc_gimbal_camera_param_query(struct pc_unpack_data_t *pc_unpack_data);	// functioncode = PC_GIMBAL_CAMERA_PARAM_QUERY 0x00CB
 static void pc_gimbal_camera_param_set(struct pc_unpack_data_t *pc_unpack_data);		// functioncode = PC_GIMBAL_CAMERA_PARAM_SET 0x00CC
 static void pc_gimbal_camera_adjust(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_GIMBAL_CAMERA_ADJUST 0x00CD
-static void pc_mac_addr_set(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_MAC_ADDR_SET 0x00D1
-static void pc_ip_addr_set(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_IP_ADDR_SET 0x00D2
-static void pc_mask_addr_set(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_MASK_ADDR_SET 0x00D3
-static void pc_gateway_addr_set(struct pc_unpack_data_t *pc_unpack_data);		// functioncode = PC_GATEWAY_ADDR_SET 0x00D4
+static void pc_mac_addr_set(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_MAC_ADDR_SET 0x01F1
+static void pc_ip_addr_set(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_IP_ADDR_SET 0x01F2
+static void pc_mask_addr_set(struct pc_unpack_data_t *pc_unpack_data);			// functioncode = PC_MASK_ADDR_SET 0x01F3
+static void pc_gateway_addr_set(struct pc_unpack_data_t *pc_unpack_data);		// functioncode = PC_GATEWAY_ADDR_SET 0x01F4
+static void pc_hardfault_info_query(struct pc_unpack_data_t *pc_unpack_data);	// functioncode = PC_HARDFAULT_INFO_QUERY 0x01F5
+static void pc_mac_addr_query(struct pc_unpack_data_t *pc_unpack_data);		// functioncode = PC_MAC_ADDR_QUERY 0x01F6
+static void pc_ip_addr_query(struct pc_unpack_data_t *pc_unpack_data);		// functioncode = PC_IP_ADDR_QUERY 0x01F7
+static void pc_mask_addr_query(struct pc_unpack_data_t *pc_unpack_data);		// functioncode = PC_MASK_ADDR_QUERY 0x01F8
+static void pc_gateway_addr_query(struct pc_unpack_data_t *pc_unpack_data);	// functioncode = PC_GATEWAY_ADDR_QUERY 0x01F9
+
 void (*pc2gimbal_pack[])(struct pc_unpack_data_t *pc_unpack_data) =
 {
 	pc_gimbal_control,
@@ -136,27 +147,28 @@ void (*pc2gimbal_pack[])(struct pc_unpack_data_t *pc_unpack_data) =
 	pc_ip_addr_set,
 	pc_mask_addr_set,
 	pc_gateway_addr_set,
+	pc_hardfault_info_query,
+	pc_mac_addr_query,
+	pc_ip_addr_query,
+	pc_mask_addr_query,
+	pc_gateway_addr_query,
 };
 
 
 static void send_to_pc(uint16_t function_code, uint8_t *buff, uint16_t len, uint8_t comm_type)
 {
 	uint16_t crc = 0;
-	uint8_t send_buf[sizeof(struct pc_comm_protocol_t) + 8 + 2] = {0};	// 预留8个字节数据，2个字节crc
+	uint8_t send_buf[256] = {0};
 
-	struct pc_comm_protocol_t gimbal_protocol;
-	gimbal_protocol.head = pc_protocol_head;
-	gimbal_protocol.source_addr = mcu_addr;
-	gimbal_protocol.target_addr = pc_addr;
-	gimbal_protocol.function_code = function_code;
-	gimbal_protocol.data_length = len;
+	struct pc_comm_protocol_t pc_protocol;
+	pc_protocol.head = pc_protocol_head;
+	pc_protocol.source_addr = mcu_addr;
+	pc_protocol.target_addr = pc_addr;
+	pc_protocol.function_code = function_code;
+	pc_protocol.data_length = len;
 
-	memcpy(send_buf, &gimbal_protocol, sizeof(struct pc_comm_protocol_t));
-
-	if(len > 0 && buff != NULL && len < 8){
-		memcpy(send_buf + sizeof(struct pc_comm_protocol_t), buff, len);
-	}
-
+	memcpy(send_buf, &pc_protocol, sizeof(struct pc_comm_protocol_t));
+	memcpy(send_buf + sizeof(struct pc_comm_protocol_t), buff, len);
 	crc = CRC16(send_buf, sizeof(struct pc_comm_protocol_t) + len);
 	memcpy(send_buf + sizeof(struct pc_comm_protocol_t) + len, &crc, 2);
 	
@@ -493,5 +505,34 @@ static void pc_gateway_addr_set(struct pc_unpack_data_t *pc_unpack_data)
 	{
 		send_to_pc(PC_GATEWAY_ADDR_SET, NULL, 0, pc_unpack_data->comm_type);
 	}
+}
+
+static void pc_hardfault_info_query(struct pc_unpack_data_t *pc_unpack_data)
+{
+	hardfault_info_t fault_info = {0};
+	HardFault_ReadInfo(&fault_info);
+	uint8_t data[sizeof(hardfault_info_t)] = {0};
+	memcpy(data, &fault_info, sizeof(hardfault_info_t));
+	send_to_pc(PC_HARDFAULT_INFO_QUERY, data, sizeof(hardfault_info_t), pc_unpack_data->comm_type);
+}
+
+static void pc_mac_addr_query(struct pc_unpack_data_t *pc_unpack_data)
+{
+	send_to_pc(PC_MAC_ADDR_QUERY, socket_param_data.mac_address, 6, pc_unpack_data->comm_type);
+}
+
+static void pc_ip_addr_query(struct pc_unpack_data_t *pc_unpack_data)
+{
+	send_to_pc(PC_IP_ADDR_QUERY, (uint8_t*)&socket_param_data.ip_address, 4, pc_unpack_data->comm_type);
+}
+
+static void pc_mask_addr_query(struct pc_unpack_data_t *pc_unpack_data)
+{
+	send_to_pc(PC_MASK_ADDR_QUERY, (uint8_t*)&socket_param_data.mask_address, 4, pc_unpack_data->comm_type);
+}
+
+static void pc_gateway_addr_query(struct pc_unpack_data_t *pc_unpack_data)
+{
+	send_to_pc(PC_GATEWAY_ADDR_QUERY, (uint8_t*)&socket_param_data.gateway_address, 4, pc_unpack_data->comm_type);
 }
 

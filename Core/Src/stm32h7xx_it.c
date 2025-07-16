@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usart.h"
+#include "emb_flash.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -120,6 +121,37 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
+  uint32_t *stack_ptr = (uint32_t*)__get_MSP();
+  uint32_t control = __get_CONTROL();
+  if (control & 0x02) {
+    stack_ptr = (uint32_t*)__get_PSP();
+  } else {
+    stack_ptr = (uint32_t*)__get_MSP();
+  }
+
+  hardfault_info_t fault_info;
+
+  // 先读取当前的故障信息，如果有，则对timestamp更新，对fault_count+1
+  if (HardFault_ReadInfo(&fault_info) == 0) {
+    fault_info.timestamp = HAL_GetTick();
+    fault_info.fault_count++;
+  } else {
+    fault_info.timestamp = HAL_GetTick();
+    fault_info.fault_count = 1;
+  }
+
+  fault_info.magic_number = HARDFAULT_MAGIC_NUMBER;
+  fault_info.sp_value     = (uint32_t)stack_ptr;
+  fault_info.r0_value     = stack_ptr[0];
+  fault_info.r1_value     = stack_ptr[1];
+  fault_info.r2_value     = stack_ptr[2];
+  fault_info.r3_value     = stack_ptr[3];
+  fault_info.r12_value    = stack_ptr[4];
+  fault_info.lr_value     = stack_ptr[5];
+  fault_info.pc_value     = stack_ptr[6];
+  fault_info.xpsr_value   = stack_ptr[7];
+
+  HardFault_WriteInfo(&fault_info);
 
   /* USER CODE END HardFault_IRQn 0 */
   while (1)

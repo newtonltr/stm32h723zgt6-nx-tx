@@ -192,7 +192,79 @@ void emb_flash_read(uint32_t address, uint32_t *data, uint32_t size)
 }
 
 
-
+/**
+ * @brief 读取HardFault故障信息
+ * @param fault_info 指向接收故障信息的结构体指针
+ * @return 0: 成功读取有效数据, -1: 没有有效数据或数据损坏
+ */
+ int HardFault_ReadInfo(hardfault_info_t *fault_info)
+ {
+	 // 检查参数有效性
+	 if (fault_info == NULL) {
+		 return -1;
+	 }
+	 
+	 // 从Flash中读取数据
+	 hardfault_info_t *stored_info = (hardfault_info_t *)HARDFAULT_STORAGE_ADDR;
+	 
+	 // 检查魔数，验证数据有效性
+	 if (stored_info->magic_number != HARDFAULT_MAGIC_NUMBER) {
+		 return -1; // 没有有效的故障记录
+	 }
+	 
+	 // 手动复制数据，避免在HardFault中断中使用memcpy
+	 uint32_t *src = (uint32_t *)stored_info;
+	 uint32_t *dst = (uint32_t *)fault_info;
+	 uint32_t copy_words = sizeof(hardfault_info_t) / 4;
+	 
+	 for (uint32_t i = 0; i < copy_words; i++) {
+		 dst[i] = src[i];
+	 }
+	 
+	 return 0; // 成功读取
+ }
+ 
+ /**
+  * @brief 写入HardFault故障信息到Flash
+  * @param fault_info 指向要写入的故障信息结构体指针
+  * @return 0: 写入成功, -1: 写入失败
+  */
+ int HardFault_WriteInfo(const hardfault_info_t *fault_info)
+ {
+	 HAL_StatusTypeDef status;
+	 
+	 // 检查参数有效性
+	 if (fault_info == NULL) {
+		 return -1;
+	 }
+	 
+	 // 关闭所有中断，确保Flash操作不被打断
+	 __disable_irq();
+	 
+	 // 检查Flash存储区域是否需要擦除
+	 uint32_t *check_addr = (uint32_t *)HARDFAULT_STORAGE_ADDR;
+	 if (*check_addr != 0xFFFFFFFF) {
+		 // Flash区域不为空，需要擦除
+		 status = emb_flash_erase(HARDFAULT_STORAGE_ADDR, sizeof(hardfault_info_t), NULL);
+		 if (status != HAL_OK) {
+			 __enable_irq(); // 恢复中断
+			 return -1; // 擦除失败
+		 }
+	 }
+	 
+	 // 将故障信息写入Flash
+	 status = emb_flash_write(HARDFAULT_STORAGE_ADDR, (uint32_t *)fault_info, sizeof(hardfault_info_t));
+	 
+	 // Flash操作完成后重新开启中断
+	 __enable_irq();
+	 
+	 if (status != HAL_OK) {
+		 return -1; // 写入失败
+	 }
+	 
+	 return 0; // 写入成功
+ }
+ 
 
 
 
