@@ -516,9 +516,21 @@ static void pc_hardfault_info_query(struct pc_unpack_data_t *pc_unpack_data)
 	send_to_pc(PC_HARDFAULT_INFO_QUERY, data, sizeof(hardfault_info_t), pc_unpack_data->comm_type);
 }
 
+uint8_t mac_query[6];
+
 static void pc_mac_addr_query(struct pc_unpack_data_t *pc_unpack_data)
 {
-	send_to_pc(PC_MAC_ADDR_QUERY, socket_param_data.mac_address, 6, pc_unpack_data->comm_type);
+	uint32_t mac_high = ETH->MACA0HR;
+	uint32_t mac_low = ETH->MACA0LR;
+
+	mac_query[5] = (uint8_t)((mac_high >> 8) & 0xFF);
+	mac_query[4] = (uint8_t)(mac_high & 0xFF);
+	mac_query[3] = (uint8_t)((mac_low >> 24) & 0xFF);
+	mac_query[2] = (uint8_t)((mac_low >> 16) & 0xFF);
+	mac_query[1] = (uint8_t)((mac_low >> 8) & 0xFF);
+	mac_query[0] = (uint8_t)(mac_low & 0xFF);
+
+	send_to_pc(PC_MAC_ADDR_QUERY, mac_query, 6, pc_unpack_data->comm_type);
 }
 
 static void pc_ip_addr_query(struct pc_unpack_data_t *pc_unpack_data)

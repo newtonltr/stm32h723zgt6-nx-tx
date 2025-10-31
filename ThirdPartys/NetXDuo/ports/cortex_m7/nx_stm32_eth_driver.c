@@ -1433,15 +1433,15 @@ static UINT  _nx_driver_hardware_initialize(NX_IP_DRIVER *driver_req_ptr)
   HAL_GPIO_WritePin(PHY_RST_GPIO_Port, PHY_RST_Pin, GPIO_PIN_SET);
   sleep_ms(2);
 
-  static uint8_t MACAddr[6];
+  // static uint8_t MACAddr[6];
   heth.Instance = ETH;
-  MACAddr[0] = 0x00;
-  MACAddr[1] = 0x80;
-  MACAddr[2] = 0xE1;
-  MACAddr[3] = 0x00;
-  MACAddr[4] = 0x00;
-  MACAddr[5] = 0x00;
-  heth.Init.MACAddr = &MACAddr[0];
+  // MACAddr[0] = 0x00;
+  // MACAddr[1] = 0x80;
+  // MACAddr[2] = 0xE1;
+  // MACAddr[3] = 0x00;
+  // MACAddr[4] = 0x00;
+  // MACAddr[5] = 0x00;
+  heth.Init.MACAddr = &socket_param_data.mac_address[0];
   heth.Init.MediaInterface = HAL_ETH_RMII_MODE;
   heth.Init.TxDesc = DMATxDscrTab;
   heth.Init.RxDesc = DMARxDscrTab;
