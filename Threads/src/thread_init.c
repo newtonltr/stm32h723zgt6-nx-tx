@@ -175,6 +175,7 @@ void thread_link_monitor_entry(ULONG input)
 {
 	INT last_state = DP83848_STATUS_LINK_DOWN;
 
+	// 等待底层驱动函数注册完成
 	sleep_ms(1000);
 	
 	while (1)
