@@ -122,7 +122,7 @@ void thread_socket_entry(ULONG thread_input)
             else
             {
                 no_recv_cnt++;
-                if (no_recv_cnt > 20 * 1000) // 超过一定时间没有接收到数据，断开连接
+                if (no_recv_cnt > 5 * 60 * 1000) // 超过一定时间没有接收到数据，断开连接
                 {
                     no_recv_cnt = 0;
                     status = nx_tcp_socket_disconnect(&tcp_socket, 2000);
