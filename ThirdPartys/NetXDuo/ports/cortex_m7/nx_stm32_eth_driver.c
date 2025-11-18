@@ -26,6 +26,7 @@
 #include "nx_stm32_eth_driver.h"
 
 #include "DP83848.h"
+#include "nx_ip.h"
 
 #endif /* NX_STM32_ETH_DRIVER_H */
 
@@ -36,6 +37,8 @@
 
 //以太网驱动信息
 static NX_DRIVER_INFORMATION nx_driver_information;
+
+static INT nx_driver_last_known_link_state = DP83848_STATUS_LINK_DOWN;
 
 /* Rounded header size */
 static ULONG header_size;
@@ -76,6 +79,7 @@ static UINT         _nx_driver_hardware_multicast_join(NX_IP_DRIVER *driver_req_
 static UINT         _nx_driver_hardware_multicast_leave(NX_IP_DRIVER *driver_req_ptr);
 static UINT         _nx_driver_hardware_get_status(NX_IP_DRIVER *driver_req_ptr);
 static VOID         _nx_driver_hardware_packet_received(VOID);
+static VOID         nx_driver_configure_mac(INT phy_state);
 #ifdef NX_ENABLE_INTERFACE_CAPABILITY
 static UINT         _nx_driver_hardware_capability_set(NX_IP_DRIVER *driver_req_ptr);
 #endif /* NX_ENABLE_INTERFACE_CAPABILITY */
@@ -485,8 +489,7 @@ static VOID  _nx_driver_enable(NX_IP_DRIVER *driver_req_ptr)
 {
 
   NX_IP           *ip_ptr;
-  ETH_MACConfigTypeDef MACConf;
-  UINT            status, duplex, speed = 0;
+  UINT            status;
   INT             PHYLinkState;
 
   /* Setup the IP pointer from the driver request.  */
@@ -518,62 +521,17 @@ static VOID  _nx_driver_enable(NX_IP_DRIVER *driver_req_ptr)
 
   PHYLinkState = nx_eth_phy_get_link_state();
 
-  /* Get link state */
-  if(PHYLinkState <= DP83848_STATUS_LINK_DOWN)
+  if(PHYLinkState > DP83848_STATUS_LINK_DOWN)
   {
-    driver_req_ptr -> nx_ip_driver_status =  NX_DRIVER_ERROR;
-    return;
+    nx_driver_configure_mac(PHYLinkState);
+    ip_ptr -> nx_ip_driver_link_up =  NX_TRUE;
   }
   else
   {
-    switch (PHYLinkState)
-    {
-#if defined(ETH_PHY_1000MBITS_SUPPORTED)
-    case DP83848_STATUS_1000MBITS_FULLDUPLEX:
-      duplex = ETH_FULLDUPLEX_MODE;
-      speed = ETH_SPEED_1000M;
-      break;
-    case DP83848_STATUS_1000MBITS_HALFDUPLEX:
-      duplex = ETH_HALFDUPLEX_MODE;
-      speed = ETH_SPEED_1000M;
-      break;
-#endif
-    case DP83848_STATUS_100MBITS_FULLDUPLEX:
-      duplex = ETH_FULLDUPLEX_MODE;
-      speed = ETH_SPEED_100M;
-      break;
-    case DP83848_STATUS_100MBITS_HALFDUPLEX:
-      duplex = ETH_HALFDUPLEX_MODE;
-      speed = ETH_SPEED_100M;
-      break;
-    case DP83848_STATUS_10MBITS_FULLDUPLEX:
-      duplex = ETH_FULLDUPLEX_MODE;
-      speed = ETH_SPEED_10M;
-      break;
-    case DP83848_STATUS_10MBITS_HALFDUPLEX:
-      duplex = ETH_HALFDUPLEX_MODE;
-      speed = ETH_SPEED_10M;
-      break;
-    default:
-      duplex = ETH_FULLDUPLEX_MODE;
-      speed = ETH_SPEED_100M;
-      break;
-    }
-
-    /* Get MAC Config MAC */
-    HAL_ETH_GetMACConfig(&eth_handle, &MACConf);
-    MACConf.DuplexMode = duplex;
-    MACConf.Speed = speed;
-
-#if defined(ETH_DMASBMR_BLEN4) /* ETH AXI support*/
-#if defined(ETH_PHY_1000MBITS_SUPPORTED)
-    MACConf.PortSelect = 0;
-#else
-    MACConf.PortSelect = 1;
-#endif
-#endif
-    HAL_ETH_SetMACConfig(&eth_handle, &MACConf);
+    ip_ptr -> nx_ip_driver_link_up =  NX_FALSE;
   }
+
+  nx_driver_last_known_link_state = PHYLinkState;
 
   /* Call hardware specific enable.  */
   status =  _nx_driver_hardware_enable(driver_req_ptr);
@@ -587,9 +545,6 @@ static VOID  _nx_driver_enable(NX_IP_DRIVER *driver_req_ptr)
 
     /* Mark request as successful.  */
     driver_req_ptr -> nx_ip_driver_status =  NX_SUCCESS;
-
-    /* Mark the IP instance as link up.  */
-    ip_ptr -> nx_ip_driver_link_up =  NX_TRUE;
   }
   else
   {
@@ -1876,6 +1831,100 @@ static UINT  _nx_driver_hardware_get_status(NX_IP_DRIVER *driver_req_ptr)
 
   /* Return success. */
   return NX_SUCCESS;
+}
+
+static VOID nx_driver_configure_mac(INT phy_state)
+{
+  ETH_MACConfigTypeDef MACConf;
+  UINT duplex;
+  UINT speed;
+
+  switch (phy_state)
+  {
+#if defined(ETH_PHY_1000MBITS_SUPPORTED)
+    case DP83848_STATUS_1000MBITS_FULLDUPLEX:
+      duplex = ETH_FULLDUPLEX_MODE;
+      speed = ETH_SPEED_1000M;
+      break;
+    case DP83848_STATUS_1000MBITS_HALFDUPLEX:
+      duplex = ETH_HALFDUPLEX_MODE;
+      speed = ETH_SPEED_1000M;
+      break;
+#endif
+    case DP83848_STATUS_100MBITS_FULLDUPLEX:
+      duplex = ETH_FULLDUPLEX_MODE;
+      speed = ETH_SPEED_100M;
+      break;
+    case DP83848_STATUS_100MBITS_HALFDUPLEX:
+      duplex = ETH_HALFDUPLEX_MODE;
+      speed = ETH_SPEED_100M;
+      break;
+    case DP83848_STATUS_10MBITS_FULLDUPLEX:
+      duplex = ETH_FULLDUPLEX_MODE;
+      speed = ETH_SPEED_10M;
+      break;
+    case DP83848_STATUS_10MBITS_HALFDUPLEX:
+      duplex = ETH_HALFDUPLEX_MODE;
+      speed = ETH_SPEED_10M;
+      break;
+    default:
+      duplex = ETH_FULLDUPLEX_MODE;
+      speed = ETH_SPEED_100M;
+      break;
+  }
+
+  HAL_ETH_GetMACConfig(&eth_handle, &MACConf);
+  MACConf.DuplexMode = duplex;
+  MACConf.Speed = speed;
+
+#if defined(ETH_DMASBMR_BLEN4) /* ETH AXI support*/
+#if defined(ETH_PHY_1000MBITS_SUPPORTED)
+  MACConf.PortSelect = 0;
+#else
+  MACConf.PortSelect = 1;
+#endif
+#endif
+  HAL_ETH_SetMACConfig(&eth_handle, &MACConf);
+}
+
+VOID nx_stm32_eth_driver_set_link_state(INT phy_state)
+{
+  NX_IP *ip_ptr = nx_driver_information.nx_driver_information_ip_ptr;
+
+  if (ip_ptr == NX_NULL)
+  {
+    return;
+  }
+
+  if (nx_driver_information.nx_driver_information_state < NX_DRIVER_STATE_INITIALIZED)
+  {
+    return;
+  }
+
+  if (phy_state <= DP83848_STATUS_LINK_DOWN)
+  {
+    if (nx_driver_last_known_link_state <= DP83848_STATUS_LINK_DOWN)
+    {
+      return;
+    }
+
+    ip_ptr -> nx_ip_driver_link_up = NX_FALSE;
+    nx_driver_last_known_link_state = DP83848_STATUS_LINK_DOWN;
+    _nx_ip_driver_link_status_event(ip_ptr, 0);
+    return;
+  }
+
+  if (nx_driver_last_known_link_state != phy_state)
+  {
+    nx_driver_configure_mac(phy_state);
+    nx_driver_last_known_link_state = phy_state;
+  }
+
+  if (ip_ptr -> nx_ip_driver_link_up == NX_FALSE)
+  {
+    ip_ptr -> nx_ip_driver_link_up = NX_TRUE;
+    _nx_ip_driver_link_status_event(ip_ptr, 0);
+  }
 }
 
 void HAL_ETH_TxFreeCallback(uint32_t * buff)

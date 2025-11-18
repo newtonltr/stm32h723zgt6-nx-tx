@@ -51,12 +51,12 @@ UINT nx_send(NX_TCP_SOCKET *socket, uint8_t *data, uint32_t len)
 
 }
 
-UINT nx_receive(NX_TCP_SOCKET *socket, uint8_t *data, ULONG *len)
+UINT nx_receive(NX_TCP_SOCKET *socket, uint8_t *data, ULONG *len, ULONG wait_option)
 {
     NX_PACKET *packet_ptr;
     UINT status = 0;
     
-    status = nx_tcp_socket_receive(socket, &packet_ptr, NX_WAIT_FOREVER);
+    status = nx_tcp_socket_receive(socket, &packet_ptr, wait_option);
     if (status == NX_SUCCESS)
     {
          // 读取数据包内容
@@ -73,6 +73,7 @@ void thread_socket_entry(ULONG thread_input)
     UINT status;
     NX_PACKET *receive_packet;
     ULONG bytes_read;
+    static uint32_t no_recv_cnt = 0;
     
     // 创建TCP服务器套接字
     status = nx_tcp_socket_create(&ip_0, &tcp_socket, "TCP Server Socket", 
@@ -93,25 +94,44 @@ void thread_socket_entry(ULONG thread_input)
         
     while (1) {
         // 等待客户端连接
-        status = nx_tcp_server_socket_accept(&tcp_socket, NX_WAIT_FOREVER);
+        status = nx_tcp_server_socket_accept(&tcp_socket, NX_NO_WAIT);
+        sleep_ms(1);
         if (status != NX_SUCCESS)
         {
             nx_tcp_server_socket_unaccept(&tcp_socket);
-            nx_tcp_server_socket_unlisten(&ip_0, TCP_SERVER_PORT);
-            nx_tcp_socket_delete(&tcp_socket);
-            return;
+            nx_tcp_server_socket_relisten(&ip_0, TCP_SERVER_PORT, &tcp_socket);
+            continue;
         }
 
+        no_recv_cnt = 0;
         while (1)
         {
             ULONG len = 0;
-            status = nx_receive(&tcp_socket, command_buffer, &len);
+            status = nx_receive(&tcp_socket, command_buffer, &len, NX_NO_WAIT);
             if (status == NX_NOT_CONNECTED) {
+                no_recv_cnt = 0;
                 nx_tcp_server_socket_unaccept(&tcp_socket);
                 nx_tcp_server_socket_relisten(&ip_0, TCP_SERVER_PORT, &tcp_socket);
                 break;
             }
-            pc_command_unpack(command_buffer, COMM_TYPE_TCP);
+            if (status == NX_SUCCESS)
+            {
+                no_recv_cnt = 0;
+                pc_command_unpack(command_buffer, COMM_TYPE_TCP);
+            }
+            else
+            {
+                no_recv_cnt++;
+                if (no_recv_cnt > 20 * 1000) // 超过一定时间没有接收到数据，断开连接
+                {
+                    no_recv_cnt = 0;
+                    nx_tcp_server_socket_unaccept(&tcp_socket);
+                    nx_tcp_server_socket_relisten(&ip_0, TCP_SERVER_PORT, &tcp_socket);
+                    break;
+                }
+            }
+            
+            sleep_ms(1);
         }  
     }
 }

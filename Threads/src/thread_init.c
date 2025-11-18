@@ -1,5 +1,7 @@
 #include "thread_init.h"
 #include "nx_stm32_eth_driver.h"
+#include "dp83848.h"
+#include "nx_ip.h"
 #include "thread_socket.h"
 #include "tx_api.h"
 #include "usart.h"
@@ -16,12 +18,19 @@
 TX_THREAD thread_init_block;
 uint64_t thread_init_stack[THREAD_INIT_STACK_SIZE/8];
 void thread_init(ULONG input);
+void thread_link_monitor_entry(ULONG input);
 
 // thread socket parameters
 #define THREAD_SOCKET_STACK_SIZE    4096u
 #define THREAD_SOCKET_PRIO          25u
 TX_THREAD thread_socket_block;
 uint64_t thread_socket_stack[THREAD_SOCKET_STACK_SIZE/8];
+
+// thread link monitor parameters
+#define THREAD_LINK_MONITOR_STACK_SIZE    1024u
+#define THREAD_LINK_MONITOR_PRIO          31u
+TX_THREAD thread_link_monitor_block;
+uint64_t thread_link_monitor_stack[THREAD_LINK_MONITOR_STACK_SIZE/8];
 
 
 // tx kits create
@@ -108,6 +117,17 @@ void  tx_application_define(void *first_unused_memory)
 		TX_NO_TIME_SLICE, 
 		TX_AUTO_START);
 
+	tx_thread_create(&thread_link_monitor_block,
+		"tx_link_monitor",
+		thread_link_monitor_entry,
+		0,
+		&thread_link_monitor_stack[0],
+		THREAD_LINK_MONITOR_STACK_SIZE,
+		THREAD_LINK_MONITOR_PRIO,
+		THREAD_LINK_MONITOR_PRIO,
+		TX_NO_TIME_SLICE,
+		TX_AUTO_START);
+
 }
 
 
@@ -148,6 +168,32 @@ void thread_init(ULONG input)  // 将UINT改为ULONG
 			gimbal_parse(&fdcan_rx_frame, &gimbal, fdcan_rx_frame.data);
 		}
 		sleep_ms(1);
+	}
+}
+
+void thread_link_monitor_entry(ULONG input)
+{
+	INT last_state = DP83848_STATUS_LINK_DOWN;
+
+	sleep_ms(1000);
+	
+	while (1)
+	{
+		if (ip_0.nx_ip_id != NX_IP_ID)
+		{
+			sleep_ms(10);
+			continue;
+		}
+
+		INT current_state = nx_eth_phy_get_link_state();
+
+		if (current_state != last_state)
+		{
+			nx_stm32_eth_driver_set_link_state(current_state);
+			last_state = current_state;
+		}
+
+		sleep_ms(10);
 	}
 }
 

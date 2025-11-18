@@ -156,6 +156,7 @@ typedef struct NX_DRIVER_INFORMATION_STRUCT
 /* Define global driver entry function. */
 
 VOID  nx_stm32_eth_driver(NX_IP_DRIVER *driver_req_ptr);
+VOID  nx_stm32_eth_driver_set_link_state(INT phy_state);
 
 /****** DRIVER SPECIFIC ****** End of part/vendor specific external function prototypes.  */
 
